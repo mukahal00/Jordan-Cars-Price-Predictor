@@ -7,17 +7,15 @@ st.set_page_config(page_title="توقع أسعار السيارات PRO", page_i
 st.title("🏎️ أداة توقع أسعار السيارات (النسخة الاحترافية)")
 st.write("أضفنا ماركة السيارة والممشى لدقة أعلى!")
 
-# --- تحميل النموذج الجديد ---
+# --- تحميل النموذج ---
 @st.cache_resource 
 def load_model():
-    # تأكد من أن اسم النموذج هنا يطابق الاسم الجديد المرفوع على جيت هب
     return tf.keras.models.load_model("jordan_cars_model_pro.keras")
 
 model = load_model()
 
 # --- قراءة البيانات لاستخراج الماركات تلقائياً ---
 df_original = pd.read_csv("cars.csv")
-# استخراج الماركات لعمل قائمة منسدلة
 df_original['Brand'] = df_original['Model'].apply(lambda x: str(x).split()[0])
 brands_list = sorted(df_original['Brand'].unique().tolist())
 
@@ -28,13 +26,26 @@ with col1:
     brand = st.selectbox("ماركة السيارة", brands_list)
     year = st.number_input("سنة الصنع", min_value=1990, max_value=2024, value=2015, step=1)
 
+# التعديل هنا: وضعنا "الحالة" و "الممشى" في نفس العمود لنقرأ الحالة أولاً
 with col2:
-    mileage = st.number_input("الممشى التقريبي (كم)", min_value=0, max_value=500000, value=75000, step=5000)
-    transmission = st.selectbox("ناقل الحركة", ["Automatic", "manual"])
+    condition = st.selectbox("حالة السيارة", ["used", "New (Zero)"])
+    
+    # 💡 التحقق الذكي: إذا كانت الحالة "جديدة"، نجعل الممشى 0 ونقوم بتعطيله
+    is_new_car = (condition == "New (Zero)")
+    default_mileage = 0 if is_new_car else 75000
+    
+    mileage = st.number_input(
+        "الممشى التقريبي (كم)", 
+        min_value=0, 
+        max_value=500000, 
+        value=default_mileage, 
+        step=5000,
+        disabled=is_new_car # هذه الخاصية هي التي تمنع المستخدم من التعديل!
+    )
 
 with col3:
+    transmission = st.selectbox("ناقل الحركة", ["Automatic", "manual"])
     fuel_type = st.selectbox("نوع الوقود", ["gasoline", "Hybrid", "electricity", "diesel"])
-    condition = st.selectbox("حالة السيارة", ["used", "New (Zero)"])
 
 # --- التوقع ---
 if st.button("توقع السعر 🔮"):
@@ -42,7 +53,6 @@ if st.button("توقع السعر 🔮"):
     user_data = pd.DataFrame([[year, fuel_type, transmission, condition, brand, mileage]], 
                              columns=['Year', 'Fuel Type', 'Transmission', 'Condition', 'Brand', 'Mileage_Num'])
     
-    # تجهيز البيانات الأصلية للدمج بنفس الطريقة (مهم جداً لترتيب الأعمدة)
     def clean_mileage_for_app(m):
         m = str(m).replace(' km', '').replace(',', '')
         if '+' in m: return float(m.replace('+', ''))
